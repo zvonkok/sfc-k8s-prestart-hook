@@ -31,8 +31,6 @@
 
 #define _cleanup_(x) __attribute__((cleanup(x)))
 
-std::fstream lg("/tmp/log.txt", std::fstream::in | std::fstream::out | std::fstream::app);
-
 
 static const std::string oci_decorator_conf = "/etc/oci-decorator/oci-decorator.d/";
 
@@ -98,19 +96,10 @@ long GetFileSize(std::string filename)
 }
 static int32_t cp(const string & dst, const string & src)
 {
-        lg << "src " << src << endl;
-        lg << "dst " << dst << endl;
-        
         ifstream f_src(src.c_str(), ios::binary);
         ofstream f_dst(dst.c_str(), ios::binary);
 
         f_dst << f_src.rdbuf();
-
-        f_src.close();
-        f_dst.close();
-
-        lg << "src size " <<  GetFileSize(src) << endl;
-        lg << "dst size " <<  GetFileSize(dst) << endl;
 }
 
 static int32_t zcopy(const string & dst, const string & src, const string & rootfs)
@@ -373,10 +362,21 @@ static int32_t parse_rootfs_from_bundle(const string & id, yajl_val *node_ptr, s
 		pr_perror("bundle not found in state");
                 return EXIT_FAILURE;
 	}
-
-        lg << "config_file: " << config_file_name.str() << endl;
+        
+        pr_pdebug("Reading config file: %s", config_file_name.str().c_str());
 	/* Read the entire config file */
 	config_data = get_json_string(config_file);
+
+
+        /* Check for environment flag SOLARFLARE_ONLOAD */
+        size_t found = config_data.find("SOLARFLARE_ONLOAD=true");
+        if (found != string::npos) {
+                pr_pdebug("Found flag, continuing ...");
+        } else {
+                pr_pdebug("SOLARFLARE_ONLOAD flag not found, exiting ... (run -it -e SOLARFLARE_ONLOAD=true )");
+                return EXIT_FAILURE;
+        }
+        
 
 	/* Parse the config file */
 	memset(errbuf, 0, BUFLEN);
@@ -408,6 +408,8 @@ static int32_t parse_rootfs_from_bundle(const string & id, yajl_val *node_ptr, s
                 new_rootfs << YAJL_GET_STRING(v_bundle_path) << "/" << lrootfs;
 		rootfs = new_rootfs.str();
 	}
+
+        
 	return EXIT_SUCCESS;
 }
 
